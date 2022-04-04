@@ -1,0 +1,66 @@
+const core = require('@actions/core');
+const lineReader = require('line-by-line');
+const fs = require('fs');
+
+try {
+	const regex = /(\w+_test.go:\d+:)/g; // Extracts file name and line where test failures occurred
+
+	const testResultsPath = core.getInput('test-results');
+	const customPackageName = core.getInput('package-name');
+
+	if (!fs.existsSync(testResultsPath)) {
+		core.warning(
+			`No file was found with the provided path: ${testResultsPath}.`
+		)
+		return
+	}
+
+	var obj = new Object();
+	var lr = new lineReader(testResultsPath);
+	lr.on('line', function(line) {
+		const currentLine = JSON.parse(line);
+		var testName = currentLine.Test;
+		if (typeof testName === "undefined") {
+			return;
+		}
+
+		var output = currentLine.Output;
+		if (typeof output === "undefined") {
+			return;
+		}
+		output = output.replace("\n", "%0A").replace("\r", "%0D")
+		// Strip github.com/owner/repo package from the path by default
+		var packageName = currentLine.Package.split("/").slice(3).join("/");
+		// If custom package is provided, strip custom package name from the path
+		if (customPackageName !== "") {
+			if (!currentLine.Package.startsWith(customPackageName)) {
+				core.warning(
+					`Expected ${currentLine.Package} to start with ${customPackageName} since "package-name" was provided.`
+				)
+			} else {
+				packageName = currentLine.Package.replace(customPackageName + "/", "")
+			}
+		}
+		var newEntry = packageName + "/" + testName;
+		if (!obj.hasOwnProperty(newEntry)) {
+			obj[newEntry] = output;
+		} else {
+			obj[newEntry] += output;
+		}
+	});
+	lr.on('end', function() {
+		for (const [key, value] of Object.entries(obj)) {
+			if (value.includes("FAIL") && value.includes("_test.go")) {
+				const result = regex.exec(value);
+				if (result != null) {
+					const parts = result[0].split(":");
+					const file = parts[0]
+					const lineNumber = parts[1];
+					core.info(`::error file=${file},line=${lineNumber}::${value}`)
+				}
+			}
+		}
+	});
+} catch (error) {
+	core.setFailed(error.message);
+}
