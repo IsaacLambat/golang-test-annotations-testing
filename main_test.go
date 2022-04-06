@@ -38,3 +38,8 @@ func TestMultipleAsserts(t *testing.T) {
 	fmt.Println("test")
 	assert.True(t, false)
 }
+
+func TestPRFail(t *testing.T) {
+	log.Println("This test will fail intentionally")
+	assert.True(t, false)
+}

@@ -1,4 +1,4 @@
-module annotations_repro
+module github.com/IsaacLambat/golang-test-annotations-testing
 
 go 1.17
 
